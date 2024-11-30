@@ -1,3 +1,6 @@
+# TheNhatAT: forked from postgres_air
+[Notion book's notes](https://tinyurl.com/5n8udkpr)
+
 # postgres\_air
 This repo contains components for building the postgres_air database,
 which can be used for training and various performance experiments.

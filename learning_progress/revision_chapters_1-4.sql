@@ -119,6 +119,57 @@ FROM pg_class
 WHERE relname = 'articles';
 SELECT pg_relation_size('articles') / 8192 AS articles_pages;
 
+-- View TOASTed columns in the articles table
+SELECT
+    a.attname AS column_name,
+    a.atttypid::regtype AS data_type,
+    CASE a.attstorage
+        WHEN 'p' THEN 'plain'
+        WHEN 'e' THEN 'external (TOAST)'
+        WHEN 'x' THEN 'extended (TOAST)'
+        WHEN 'm' THEN 'main'
+        END AS storage_type,
+    pg_column_size(articles.content) AS column_bytes_used
+FROM
+    pg_attribute a
+        JOIN
+    articles ON true  -- Just to get one row from articles
+WHERE
+    a.attrelid = 'articles'::regclass
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+ORDER BY
+    a.attnum;
+
+-- See the TOAST chunks for our text field
+-- Note: This requires superuser privileges or pg_read_all_stats
+SELECT
+    chunk_id,
+    chunk_seq,
+    LENGTH(chunk_data) as chunk_size
+FROM
+    pg_toast.pg_toast_25140
+ORDER BY
+    chunk_id, chunk_seq;
+
+-- Find all TOAST tables and their sizes
+SELECT
+    c.relname AS table_name,
+    t.relname AS toast_table_name,
+    pg_size_pretty(pg_relation_size(c.oid)) AS table_size,
+    pg_size_pretty(pg_relation_size(t.oid)) AS toast_size,
+    pg_relation_size(t.oid)::float /
+    NULLIF(pg_relation_size(c.oid), 0) * 100 AS toast_percent
+FROM
+    pg_class c
+        JOIN
+    pg_class t ON c.reltoastrelid = t.oid
+WHERE
+    c.relkind = 'r'
+  AND c.relnamespace = 'public'::regnamespace  -- User tables only
+ORDER BY
+    pg_relation_size(t.oid) DESC;
+
 -- Check for table bloat
 SELECT
     current_database(), schemaname, tablename,
